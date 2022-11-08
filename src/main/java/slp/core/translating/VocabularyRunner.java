@@ -86,7 +86,7 @@ public class VocabularyRunner {
 				Integer count = Integer.parseInt(split[0]);
 				Integer index = Integer.parseInt(split[1]);
 				if (index > 0 && index != vocabulary.size()) {
-					System.out.println("VocabularyRunner.read(): non-consecutive indices while reading vocabulary!");
+					//System.out.println("VocabularyRunner.read(): non-consecutive indices while reading vocabulary!");
 				}
 				String token = split[2];
 				vocabulary.store(token, count);

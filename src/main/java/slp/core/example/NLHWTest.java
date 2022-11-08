@@ -4,6 +4,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -46,11 +47,11 @@ import com.sun.management.OperatingSystemMXBean;
  * 
  * @author Vincent Hellendoorn
  */
-public class BasicNLRunner {
+public class NLHWTest {
 	public static final File COUNTERFILE = new File("G:\\MASTER\\MODELS\\SLP-Core\\model_ast_small.txt");
 	public static final File VOCABFILE = new File("G:\\MASTER\\MODELS\\SLP-Core\\ast_small_vocab.txt");
 	public static final File TRAIN = new File("G:\\MASTER\\scenario\\ast\\train\\");
-	public static final File TEST = new File("G:\\MASTER\\raw_files\\AST\\small\\eval\\sicherungskopie\\temp\\");
+	public static final File TEST = new File("G:\\MASTER\\raw_files\\AST\\small\\eval\\sicherungskopie\\");
 	public static final File OUT = new File("G:\\MASTER\\MODELS\\SLP-Core\\");
 	public static final boolean loadCounter = true;
 	public static final boolean loadVocab = true;
@@ -58,8 +59,8 @@ public class BasicNLRunner {
 	public static final boolean doTrain = false;
 	public static final String modelName = "ast_global_2";
 	public static final String language = "simple";
-	public static final int maxSamples = 100000;
-	public static final File expFile = new File("G:\\MASTER\\Evaluation\\"+"SLP_"+ modelName+".txt");
+	public static final int maxSamples = 10000;
+	public static final File expFile = new File("G:\\MASTER\\Evaluation\\"+"SLP_"+ modelName+"_hw.txt");
 	
 	private static NGramModel getNGramModel() {
 		Counter counter;
@@ -187,97 +188,37 @@ public class BasicNLRunner {
 			bw.newLine();
 			bw.close();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
     	
     }
 	public static void main(String[] args) {
-		long t = System.currentTimeMillis();
-		// 1. Lexing
-		//   a. Set up lexer using a PunctuationLexer (splits on whitespace, and separates out punctuation).
-		//	    - You can also use WhitespaceLexer (just splits on whitespace), for instance if you already lexed your text.
-		//		- The second parameter informs it that we want to treat each line in the file in isolation.
-		//		  This is often true for natural language tasks, but change it if applicable for you.
+		OperatingSystemMXBean bean = (com.sun.management.OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
+		
 		Lexer lexer = new PunctuationLexer();
 		LexerRunner lexerRunner = new LexerRunner(lexer, true);
-		//   b. If your data does not contain sentence markers (for the start and end of each file), add these here;
-		//		- The model will assume that these markers are present and always skip the first token when modeling
 		lexerRunner.setSentenceMarkers(true);
 		Vocabulary vocabulary = setupVocabulary();
-		// 3. Model
-		//	  a. We will use an n-gram model with Modified Absolute Discounting (works well for NLP)
-		//		 - The n-gram order is set to 4, which works better for NLP than the code standard (6)
+		
 		Model model = getModel();
-		//	  b. We create a ModelRunner with this model and ask it to learn the train directory
-		//		 - This invokes Model.learn for each file, which is fine for n-gram models since these are count-based;
-		//         other model implementations may prefer to train in their own way.
+		
 		ModelRunner modelRunner = new ModelRunner(model, lexerRunner, vocabulary);
-		System.out.println("Model loaded in " + (System.currentTimeMillis() - t)/1000 + "s");
+		
 
 		FileExtractor javafileExtractor = new FileExtractor("raw");
 		List<File> files = javafileExtractor.getFilesFromFolder(TEST.getAbsolutePath());
 		System.out.println(files.size());
 		List<String> examples = getExamples(files, lexer);
 		System.out.println(examples.size());
-		if(doTrain) {
-			// 2. Vocabulary
-			//    a. Ignore any words seen less than twice (i.e. one time) in training data, replacing these with "<unk>"
-			//       (other values may be better, esp. for very larger corpora)
-			VocabularyRunner.cutOff(2);
-			//	  b. Build the vocabulary on the training data with convenience function provided by VocabularyRunner
-			//       - You can use VocabularyRunner.write to write it for future use (VocabularyRunner.read to read it back in)
-			vocabulary = VocabularyRunner.build(lexerRunner, TRAIN);
-			//    c. Close the resulting vocabulary (i.e. treat new words as "<unk>") now that it is complete.
-			//		 - Note: this is typical for natural language, but less applicable to source code.
-			vocabulary.close();
-			modelRunner = new ModelRunner(model, lexerRunner, vocabulary);
-			modelRunner.learnDirectory(TRAIN);
-			System.out.println("Model counted in " + (System.currentTimeMillis() - t)/1000 + "s");
-			Counter counter = ((NGramModel) model).getCounter();
-			// Force GigaCounter.resolve() (if applicable), just for accurate timings below
-			counter.getCount();
-			System.out.println("Writing counter to file");
-			File outFile = new File(OUT, "model_" + modelName + ".txt");
-			CounterIO.writeCounter(counter, outFile);
-
-			System.out.println("Writing vocabulary to file");
-			File vocabFile = new File(OUT, modelName + "_vocab.txt");
-			VocabularyRunner.write(vocabulary, vocabFile);
-
-			//    d. We assume you are self-testing if the train and test directory are equal.
-			//		 This will make it temporarily forget any sequence to model, effectively letting you train and test on all your data
-			modelRunner.setSelfTesting(TRAIN.equals(TEST));
-			System.out.println("Model saved in " + (System.currentTimeMillis() - t)/1000 + "s");
-		}
-
-
-
-		
+		int len = examples.size();
 		
 		// 4. Running
 		//    a. Model each file in 'test' recursively
-		/**
-		Stream<Pair<File, List<List<Double>>>> modeledFiles = modelRunner.modelDirectory(TEST);
-		//	  b. Retrieve overall entropy statistics using ModelRunner's convenience method
-		DoubleSummaryStatistics statistics = modelRunner.getStats(modeledFiles);
-		Double entropy = statistics.getAverage();
-		System.out.printf("Modeled %d tokens, average entropy:\t%.4f\n", statistics.getCount(), entropy);
-		Double perplexity = Math.pow(2.0d, entropy);
-		System.out.println("Perplexity: "+ perplexity.toString());
-		*/
 		Random rand = new Random(66);
-		float mrr = 0.0f;
-		float acc = 0.0f;
-		float acc5 = 0.0f;
-		int len = examples.size();
-		long pred_time = 0L;
+		long mem = 0;
+		double cpu = 0.0f;
 		for(String example : examples) {
-			//System.out.println(example);
-			// Test string for prediction, predict at last position (= mask)
-			//String test_str = "public static void main(String[] args";
 			// Tokenize test string
-			long p1 = 	System.currentTimeMillis();
 			Stream<String> testtok = lexer.lexLine(example);
 			Stream<Integer> voc = vocabulary.toIndices(testtok);
 			List<Integer> vocL = voc.collect(toList());
@@ -288,55 +229,13 @@ public class BasicNLRunner {
 			
 			//Prediction
 			Map<Integer, Pair<Double, Double>> preds = model.predictToken(vocL, index);
+			cpu += bean.getProcessCpuLoad();
+			mem += bean.getCommittedVirtualMemorySize();
 			HashMap<Integer, Pair<Double, Double>> topk = sortByValue(preds);
 			
-			//List<Integer> tt = new ArrayList<Integer>();
-			//int j = 0;
-			/*
-			int best = -1;
-			// Loop over all predictions to find best prediction (highest probability)
-			// Predcition is map with Integer (vocabulary ID) and corresponding Pair (probability, confidence) (left = probability )
-			Map.Entry<Integer, Pair<Double, Double>> bestEntry = null;
-			for(Map.Entry<Integer, Pair<Double, Double>> entr : preds.entrySet()){
-				Pair<Double, Double> bestP = entr.getValue();
-				if(bestEntry == null || bestP.left.compareTo(bestEntry.getValue().left) > 0){
-					bestEntry = entr;
-				}
-			}
-			*/
-			int c = 0;
-			
-			List<Integer> top5 = new ArrayList<Integer>();
-			for(Entry<Integer, Pair<Double, Double>> m : topk.entrySet()) {
-				if(c<5)
-					top5.add(m.getKey());
-				if(m.getKey() == ground_truth)
-					mrr += ModelRunner.toMRR(c);
-				if(c == 0 && m.getKey() == ground_truth)
-					acc++;
-				if(c < 4 && m.getKey() == ground_truth)
-					acc5++;
-				c++;
-			}
-			//List<Integer> tests = new ArrayList(preds.keySet());
-			// save best ID
-			//tt.add(bestEntry.getKey());
-			//List<String> predWords = vocabulary.toWords(tests);
-			
-			// Map ID -> word
-			//List<String> predWords = vocabulary.toWords(tt);
-			List<String> predTop5 = vocabulary.toWords(top5);
-			long p2 = System.currentTimeMillis();
-			pred_time += p2-p1;
-			writeToFile(example+"\t ground truth: " + gt + "\t Top5: " +  predTop5.toString());
-			//System.out.println(predTop5);
 		
 		}
-		writeToFile("Top1 accuracy: " + (float) (acc/len));
-		writeToFile("Top5 accuracy: " + (float) (acc5/len));
-		writeToFile("average prediction time: " + (float)(pred_time/len)/1000.0f);
-		writeToFile("MRR: " + (float) (mrr/len));
-		// Print best prediction
-		//System.out.println(predWords);
+		writeToFile("CPU Percentage of JVM: " + (float) (cpu/len) + " %");
+		writeToFile("Virtual Memory: " + (float)(mem/len) / (float)(1e6) + " MB");
 	}
 }
